@@ -251,7 +251,6 @@ def _build_default_registry() -> ProviderRegistry:
                 requires_api_key=False,
                 connection=ProviderConnection(
                     api_key_env="AWS_BEARER_TOKEN_BEDROCK",
-                    aws_region="us-east-1",
                     aws_region_env="AWS_REGION_NAME",
                     aws_role_arn_env="AWS_ROLE_ARN",
                 ),
@@ -400,8 +399,8 @@ def _resolve_connection(
     project_id = connection.project_id or _env_value(connection.project_id_env)
     headers = dict(connection.headers)
 
-    # AWS/Bedrock-specific resolution
-    aws_region = connection.aws_region or _env_value(connection.aws_region_env)
+    # AWS/Bedrock-specific resolution (env var → override → fallback to us-east-1)
+    aws_region = connection.aws_region or _env_value(connection.aws_region_env) or _env_value("AWS_DEFAULT_REGION")
     aws_role_arn = connection.aws_role_arn or _env_value(connection.aws_role_arn_env)
 
     # Fixed custom endpoint env vars for on-prem/OpenAI-compatible usage
