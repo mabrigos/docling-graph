@@ -63,6 +63,9 @@ venv/
 vllm/
 ENV/
 env.bak/
+
+# Test outputs
+scripts/tests/output/
 venv.bak/
 
 # IDEs

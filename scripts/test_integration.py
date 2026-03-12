@@ -34,8 +34,8 @@ sys.path.insert(0, str(project_root))
 
 def main():
     parser = argparse.ArgumentParser(description="Docling-Graph Integration Test")
-    parser.add_argument("--source", required=True, help="Path to PDF or document")
-    parser.add_argument("--template", required=True, help="Dotted path to Pydantic template class")
+    parser.add_argument("--source", default="scripts/tests/pdfs/igcse_biology_4ed_tr_chapter_1.pdf", help="Path to PDF or document")
+    parser.add_argument("--template", default="scripts.tests.templates.TeacherResourceChapter", help="Dotted path to Pydantic template class")
     parser.add_argument("--provider", default=None, help="Override LLM provider (e.g. bedrock)")
     parser.add_argument("--model", default=None, help="Override model ID")
     parser.add_argument("--output-dir", default="scripts/tests/output", help="Output directory")
