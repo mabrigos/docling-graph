@@ -368,6 +368,20 @@ class ExtractionStage(PipelineStage):
 
         logger.info(f"[{self.name()}] Extracted {len(context.extracted_models)} items")
 
+        # Generate document structure chunks for downstream use (e.g. embeddings)
+        if context.docling_document is not None:
+            try:
+                from ..core.extractors.document_chunker import DocumentChunker
+
+                chunker = DocumentChunker(
+                    chunk_max_tokens=context.config.chunk_max_tokens or 512,
+                    tokenizer_name="tiktoken",
+                )
+                context.text_chunks = chunker.chunk_document(context.docling_document)
+                logger.info(f"[{self.name()}] Generated {len(context.text_chunks)} text chunks")
+            except Exception as chunk_err:
+                logger.warning(f"[{self.name()}] Chunk generation failed (non-fatal): {chunk_err}")
+
         return context
 
     def _create_extractor(self, context: PipelineContext) -> Any:

@@ -48,6 +48,38 @@ class CypherExporter:
             f.write("\n// --- Create Relationships ---\n")
             self._write_relationships(graph, f)
 
+    def export_as_statements(self, graph: nx.DiGraph) -> list[str]:
+        """Export graph as a list of Cypher CREATE statements (no file I/O).
+
+        Lambda-friendly alternative to export() — returns statements as strings
+        for direct execution against Neo4j/Neptune or inclusion in JSON output.
+
+        Args:
+            graph: NetworkX directed graph to export.
+
+        Returns:
+            List of individual Cypher CREATE statements.
+
+        Raises:
+            ValueError: If graph is empty.
+        """
+        if not self.validate_graph(graph):
+            raise ValueError("Cannot export empty graph")
+
+        import io
+
+        buf = io.StringIO()
+        self._write_nodes(graph, buf)
+        self._write_relationships(graph, buf)
+
+        raw = buf.getvalue()
+        statements = [
+            line.strip()
+            for line in raw.splitlines()
+            if line.strip() and not line.strip().startswith("//")
+        ]
+        return statements
+
     def validate_graph(self, graph: nx.DiGraph) -> bool:
         """Validate that graph is not empty.
 

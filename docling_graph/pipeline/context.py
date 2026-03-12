@@ -63,6 +63,7 @@ class PipelineContext:
     # Output management and trace data (NEW)
     output_manager: Any | None = None  # OutputDirectoryManager, avoid circular import
     trace_data: EventTrace | None = None
+    text_chunks: list[str] | None = None  # Document structure chunks for embedding
 
     def __post_init__(self) -> None:
         """Initialize node registry if not provided."""
