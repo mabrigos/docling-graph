@@ -44,10 +44,9 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://github.com/docling-project/docling-graph"
-repository = "https://github.com/docling-project/docling-graph"
-issues = "https://github.com/docling-project/docling-graph/issues"
-changelog = "https://github.com/docling-project/docling-graph/blob/main/CHANGELOG.md"
+homepage = "https://github.com/mabrigos/docling-graph"
+repository = "https://github.com/mabrigos/docling-graph"
+upstream = "https://github.com/docling-project/docling-graph"
 
 [project.scripts]
 docling-graph = "docling_graph.cli.main:main"
@@ -59,63 +58,6 @@ delta-resolvers = [
     "rapidfuzz",
 ]
 
-[dependency-groups]
-# Development tools (linters, type-checkers) and utilities
-dev = [
-    "pre-commit~=4.5",
-    "mypy~=1.10",
-    "types-setuptools>=80.9,<83.0",
-    "pandas-stubs~=2.1",
-    "types-openpyxl~=3.1",
-    "types-requests~=2.31",
-    "boto3-stubs~=1.37",
-    "types-urllib3~=1.26",
-    "types-tqdm~=4.67",
-    "coverage~=7.6",
-    "pytest~=9.0",
-    "pytest-cov>=6.1.1",
-    "pytest-dependency~=0.6",
-    "pytest-durations~=1.6.1",
-    "pytest-xdist~=3.3",
-    "ipykernel~=7.1",
-    "nbqa~=1.9",
-    "python-semantic-release>=9.0.0",
-    "mypy>=1.4.0",
-    "ruff>=0.0.280",
-    # Documentation tools
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.0.0",
-    "mkdocstrings[python]>=0.24.0",
-    "pymdown-extensions>=10.0.0",
-]
-
-# Test stack and utilities
-test = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "pytest-mock>=3.11.0",
-    "pytest-xdist>=3.3.0",
-    "pytest-timeout>=2.1.0",
-    "hypothesis>=6.82.0",
-    "pytest-asyncio>=0.21.0",
-    "freezegun>=1.2.2",
-    "responses>=0.23.0",
-    "faker>=19.0.0",
-    "types-PyYAML",
-    "types-requests",
-    "mypy>=1.4.0",
-]
-
-# Notebook-related tools and data analysis helpers
-notebook = [
-    "notebook",
-    "ipython",
-    "pandas",
-]
-
-[tool.uv]
-package = true
-default-groups = ["dev", "test", "notebook"]
 
 [tool.setuptools.packages.find]
 include = ["docling_graph*"]
@@ -171,7 +113,6 @@ classmethod-decorators = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["E402", "F401"]
-"tests/**/*.py" = ["ASYNC", "ANN201", "ANN001"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 30
@@ -183,7 +124,7 @@ combine-as-imports = true
 pretty = true
 python_version = "3.10"
 no_implicit_optional = true
-exclude = ["^site/", "^docs/examples/"]
+exclude = ["^site/"]
 plugins = "pydantic.mypy"
 warn_return_any = true
 warn_unused_configs = true
@@ -214,80 +155,3 @@ module = [
     "spacy.*",
 ]
 ignore_missing_imports = true
-
-[tool.semantic_release]
-version_toml = ["pyproject.toml:project.version"]
-version_variables = ["docling_graph/__init__.py:__version__"]
-commit_message = "chore(release): bump package version to {version}"
-
-# Prevent automatic major version bumps - major releases require manual Git tags
-major_on_zero = false
-allow_zero_version = false
-
-[tool.semantic_release.branches.main]
-match = "main"
-prerelease = false
-
-# Custom commit parser to cap BREAKING CHANGE at minor releases
-[tool.semantic_release.commit_parser_options]
-allowed_tags = ["feat", "fix", "perf", "refactor", "docs", "style", "test", "build", "ci", "chore"]
-minor_tags = ["feat"]
-patch_tags = ["fix", "perf", "refactor"]
-
-[tool.semantic_release.changelog]
-# Update mode: insert new release after insertion_flag (see CHANGELOG.md).
-mode = "update"
-insertion_flag = "<!-- version list -->"
-exclude_commit_patterns = [
-  "chore\\(release\\):.*",  # exclude version-bump commits from changelog
-]
-
-[tool.semantic_release.changelog.default_templates]
-changelog_file = "CHANGELOG.md"
-
-[tool.semantic_release.changelog.environment]
-block_start_string = "{%"
-block_end_string = "%}"
-variable_start_string = "{{"
-variable_end_string = "}}"
-comment_start_string = "{#"
-comment_end_string = "#}"
-trim_blocks = false
-lstrip_blocks = false
-newline_sequence = "\n"
-keep_trailing_newline = false
-extensions = []
-autoescape = true
-
-[tool.semantic_release.remote]
-name = "origin"
-type = "github"
-ignore_token_for_push = false
-
-[tool.semantic_release.publish]
-dist_glob_patterns = ["dist/*"]
-upload_to_vcs_release = true
-
-[tool.pytest.ini_options]
-filterwarnings = [
-    "error",
-    # Ignore ResourceWarnings from unclosed sockets/event loops
-    "ignore::ResourceWarning",
-    # Ignore warnings from external dependencies
-    "ignore:.*Use BaseMetaSerializer.*:DeprecationWarning",
-    "ignore:.*Using `@model_validator` with mode='after' on a classmethod is deprecated.*:pydantic.warnings.PydanticDeprecatedSince212",
-]
-addopts = "--cov=docling_graph --cov-report=term-missing"
-testpaths = ["tests"]
-
-[tool.coverage.run]
-source = ["docling_graph"]
-omit = ["tests/*"]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if __name__ == .__main__.:",
-    "raise NotImplementedError",
-]
