@@ -3,15 +3,29 @@ Pipeline configuration class for type-safe config creation.
 
 This module provides a PipelineConfig class that makes it easy to create
 configurations for the docling-graph pipeline programmatically.
+
+Environment variables (loaded from .env via python-dotenv):
+    LLM_PROVIDER          - Override provider (e.g. bedrock, openai)
+    LLM_MODEL_ID          - Override model ID
+    LLM_TEMPERATURE       - Generation temperature (0.0-1.0)
+    LLM_MAX_TOKENS        - Max output tokens per LLM call
+    CHUNK_MAX_TOKENS      - Max tokens per document chunk
+    PROCESSING_MODE       - one-to-one | many-to-one
+    EXTRACTION_CONTRACT   - direct | staged | delta
+    STRUCTURED_OUTPUT     - true | false
 """
 
+import os
 from pathlib import Path
 from typing import Any, Dict, Literal, Optional, Union
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing_extensions import Self
 
 from .llm_clients.config import LlmRuntimeOverrides
+
+load_dotenv()
 
 
 class BackendConfig(BaseModel):
@@ -341,6 +355,30 @@ class PipelineConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_config(self) -> Self:
+        """Apply environment variable defaults for unset fields."""
+        # Provider/model from env (only if not explicitly set)
+        if not self.provider_override:
+            env_provider = os.getenv("LLM_PROVIDER")
+            if env_provider:
+                self.provider_override = env_provider
+        if not self.model_override:
+            env_model = os.getenv("LLM_MODEL_ID")
+            if env_model:
+                self.model_override = env_model
+
+        # Generation params from env → llm_overrides
+        env_temp = os.getenv("LLM_TEMPERATURE")
+        if env_temp and self.llm_overrides.generation.temperature is None:
+            self.llm_overrides.generation.temperature = float(env_temp)
+        env_max_tokens = os.getenv("LLM_MAX_TOKENS")
+        if env_max_tokens and self.llm_overrides.generation.max_tokens is None:
+            self.llm_overrides.generation.max_tokens = int(env_max_tokens)
+
+        # Chunk size from env
+        env_chunk = os.getenv("CHUNK_MAX_TOKENS")
+        if env_chunk and self.chunk_max_tokens is None:
+            self.chunk_max_tokens = int(env_chunk)
+
         return self
 
     def to_metadata_config_dict(

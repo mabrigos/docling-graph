@@ -156,7 +156,7 @@ class ProviderDefinition(BaseModel):
     requires_api_key: bool = False
     requires_project_id: bool = False
     connection: ProviderConnection = Field(default_factory=ProviderConnection)
-    tokenizer: str = "sentence-transformers/all-MiniLM-L6-v2"
+    tokenizer: str = "tiktoken"
     merge_threshold: float = 0.95
 
     @field_validator("merge_threshold")
@@ -254,7 +254,7 @@ def _build_default_registry() -> ProviderRegistry:
                     aws_region_env="AWS_REGION_NAME",
                     aws_role_arn_env="AWS_ROLE_ARN",
                 ),
-                tokenizer="sentence-transformers/all-MiniLM-L6-v2",
+                tokenizer="tiktoken",
                 merge_threshold=0.95,
             ),
             "mistral": ProviderDefinition(
@@ -272,7 +272,7 @@ def _build_default_registry() -> ProviderRegistry:
             "gemini": ProviderDefinition(
                 requires_api_key=True,
                 connection=ProviderConnection(api_key_env="GEMINI_API_KEY"),
-                tokenizer="sentence-transformers/all-MiniLM-L6-v2",
+                tokenizer="tiktoken",
                 merge_threshold=0.95,
             ),
             "watsonx": ProviderDefinition(

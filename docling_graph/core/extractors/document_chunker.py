@@ -3,6 +3,7 @@ Structure-preserving document chunker using Docling's HybridChunker.
 
 - Single sizing knob: chunk_max_tokens (with sensible default)
 - Always initializes tokenizer and chunker (no lazy defaults)
+- Uses tiktoken by default (pure Python, no model download needed)
 
 Preserves:
 - Tables (not split across chunks)
@@ -16,35 +17,11 @@ import re
 from typing import List, Union
 
 from docling.chunking import HybridChunker
-from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
 from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 from docling_core.types.doc import DoclingDocument
 from rich import print as rich_print
-from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
-
-# Large tokenizer max length used only for counting/splitting operations.
-# This avoids HF warnings when we inspect oversized text before re-splitting it.
-_TOKENIZER_COUNTING_MAX_LENGTH = 1_000_000
-
-
-def _raise_tokenizer_max_length(
-    hf_tokenizer: PreTrainedTokenizerBase, chunk_max_tokens: int
-) -> None:
-    """Raise the tokenizer's model_max_length so encoding long text for counting doesn't warn.
-
-    We use the tokenizer only for token counting and chunk splitting, not for the model.
-    HybridChunker can produce chunks slightly over chunk_max_tokens; encoding them would
-    otherwise trigger: "Token indices sequence length is longer than the specified
-    maximum sequence length (e.g. 685 > 512)".
-    """
-    current = getattr(hf_tokenizer, "model_max_length", None)
-    if not isinstance(current, int):
-        return
-    new_max = max(chunk_max_tokens, _TOKENIZER_COUNTING_MAX_LENGTH)
-    if current < new_max:
-        hf_tokenizer.model_max_length = new_max
 
 
 class DocumentChunker:
@@ -54,6 +31,7 @@ class DocumentChunker:
     - Single sizing parameter: chunk_max_tokens (defaults to 512)
     - No coupling to model context limits or output budgets
     - Always initializes tokenizer and chunker
+    - Uses tiktoken (cl100k_base) by default — lightweight, no model download
     """
 
     def __init__(
@@ -66,44 +44,36 @@ class DocumentChunker:
         Initialize the chunker with explicit parameters.
 
         Args:
-            tokenizer_name: Name of the tokenizer to use (default: sentence-transformers/all-MiniLM-L6-v2)
+            tokenizer_name: Tokenizer to use. Default "tiktoken" uses cl100k_base encoding.
+                           Also accepts HuggingFace model names for backward compatibility.
             chunk_max_tokens: Maximum tokens per chunk (default: 512)
             merge_peers: Whether to merge peer sections in chunking (default: True)
         """
         if tokenizer_name is None:
-            tokenizer_name = "sentence-transformers/all-MiniLM-L6-v2"
+            tokenizer_name = "tiktoken"
 
         self.tokenizer_name = tokenizer_name
         self.chunk_max_tokens = chunk_max_tokens
         self.merge_peers = merge_peers
 
-        # Initialize tokenizer (library API uses max_tokens)
         if tokenizer_name == "tiktoken":
-            try:
-                import tiktoken
+            import tiktoken
 
-                tt_tokenizer = tiktoken.get_encoding("cl100k_base")
-                self.tokenizer: Union[HuggingFaceTokenizer, OpenAITokenizer] = OpenAITokenizer(
-                    tokenizer=tt_tokenizer,
-                    max_tokens=chunk_max_tokens,
-                )
-            except ImportError:
-                rich_print(
-                    "[yellow][DocumentChunker][/yellow] tiktoken not installed, "
-                    "falling back to HuggingFace tokenizer"
-                )
-                hf_tokenizer = AutoTokenizer.from_pretrained(
-                    "sentence-transformers/all-MiniLM-L6-v2"
-                )
-                _raise_tokenizer_max_length(hf_tokenizer, chunk_max_tokens)
-                self.tokenizer = HuggingFaceTokenizer(
-                    tokenizer=hf_tokenizer,
-                    max_tokens=chunk_max_tokens,
-                )
+            tt_tokenizer = tiktoken.get_encoding("cl100k_base")
+            self.tokenizer: Union["OpenAITokenizer", object] = OpenAITokenizer(
+                tokenizer=tt_tokenizer,
+                max_tokens=chunk_max_tokens,
+            )
         else:
-            # HuggingFace tokenizer
+            # HuggingFace tokenizer fallback (requires transformers package)
+            from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
+            from transformers import AutoTokenizer
+
             hf_tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-            _raise_tokenizer_max_length(hf_tokenizer, chunk_max_tokens)
+            # Raise max_length to avoid warnings during token counting
+            current = getattr(hf_tokenizer, "model_max_length", None)
+            if isinstance(current, int) and current < max(chunk_max_tokens, 1_000_000):
+                hf_tokenizer.model_max_length = max(chunk_max_tokens, 1_000_000)
             self.tokenizer = HuggingFaceTokenizer(
                 tokenizer=hf_tokenizer,
                 max_tokens=chunk_max_tokens,
