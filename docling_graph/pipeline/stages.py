@@ -440,68 +440,49 @@ class ExtractionStage(PipelineStage):
                 from pathlib import Path
 
                 staged_config["debug_dir"] = str(Path(conf["output_dir"]) / "debug")
-        backend = cast(Literal["vlm", "llm"], conf["backend"])
-        inference = cast(str, conf["inference"])
+        backend = cast(Literal["llm"], conf["backend"])
 
         model_config = self._get_model_config(
             conf["models"],
-            backend,
-            inference,
             conf.get("model_override"),
             conf.get("provider_override"),
         )
 
         logger.info(f"Using model: {model_config['model']} (provider: {model_config['provider']})")
 
-        if backend == "vlm":
-            return ExtractorFactory.create_extractor(
-                processing_mode=processing_mode,
-                backend_name="vlm",
-                extraction_contract=extraction_contract,
-                staged_config=staged_config,
-                model_name=model_config["model"],
-                docling_config=conf["docling_config"],
-                structured_output=bool(conf.get("structured_output", True)),
-                structured_sparse_check=bool(conf.get("structured_sparse_check", True)),
-                use_chunking=bool(conf.get("use_chunking", True)),
-                chunk_max_tokens=conf.get("chunk_max_tokens"),
-            )
+        if context.config.llm_client is not None:
+            llm_client = context.config.llm_client
         else:
-            if context.config.llm_client is not None:
-                llm_client = context.config.llm_client
-            else:
-                llm_client = self._initialize_llm_client(
-                    model_config["provider"],
-                    model_config["model"],
-                    context.config.llm_overrides,
-                )
-            return ExtractorFactory.create_extractor(
-                processing_mode=processing_mode,
-                backend_name="llm",
-                extraction_contract=extraction_contract,
-                staged_config=staged_config,
-                llm_client=llm_client,
-                docling_config=conf["docling_config"],
-                structured_output=bool(conf.get("structured_output", True)),
-                structured_sparse_check=bool(conf.get("structured_sparse_check", True)),
-                use_chunking=bool(conf.get("use_chunking", True)),
-                chunk_max_tokens=conf.get("chunk_max_tokens"),
+            llm_client = self._initialize_llm_client(
+                model_config["provider"],
+                model_config["model"],
+                context.config.llm_overrides,
             )
+        return ExtractorFactory.create_extractor(
+            processing_mode=processing_mode,
+            backend_name="llm",
+            extraction_contract=extraction_contract,
+            staged_config=staged_config,
+            llm_client=llm_client,
+            docling_config=conf["docling_config"],
+            structured_output=bool(conf.get("structured_output", True)),
+            structured_sparse_check=bool(conf.get("structured_sparse_check", True)),
+            use_chunking=bool(conf.get("use_chunking", True)),
+            chunk_max_tokens=conf.get("chunk_max_tokens"),
+        )
 
     @staticmethod
     def _get_model_config(
         models_config: Dict[str, Any],
-        backend: str,
-        inference: str,
         model_override: str | None = None,
         provider_override: str | None = None,
     ) -> Dict[str, str]:
         """Retrieve model configuration based on settings."""
-        model_config = models_config.get(backend, {}).get(inference, {})
+        model_config = models_config.get("llm", {}).get("remote", {})
         if not model_config:
             raise ConfigurationError(
-                f"No configuration found for backend='{backend}' with inference='{inference}'",
-                details={"backend": backend, "inference": inference},
+                "No configuration found for backend='llm' with inference='remote'",
+                details={"backend": "llm", "inference": "remote"},
             )
 
         provider = provider_override or model_config.get("provider")
@@ -509,7 +490,7 @@ class ExtractionStage(PipelineStage):
 
         if not model:
             raise ConfigurationError(
-                "Resolved model is empty", details={"backend": backend, "inference": inference}
+                "Resolved model is empty", details={"backend": "llm", "inference": "remote"}
             )
 
         return {"model": model, "provider": provider}
@@ -556,21 +537,7 @@ class ExtractionStage(PipelineStage):
                 details={"input_type": input_type},
             )
 
-        # Only LLM backend supports text extraction
         conf = context.config.to_dict()
-        backend = cast(Literal["vlm", "llm"], conf["backend"])
-
-        if backend == "vlm":
-            input_type = (
-                context.input_metadata.get("input_type") if context.input_metadata else "unknown"
-            )
-            raise ExtractionError(
-                "VLM backend does not support text-only inputs. Use LLM backend instead.",
-                details={
-                    "backend": backend,
-                    "input_type": input_type,
-                },
-            )
 
         # Type assertions for mypy
         if not isinstance(context.normalized_source, str):
@@ -587,12 +554,8 @@ class ExtractionStage(PipelineStage):
         logger.info(f"[{self.name()}] Extracting from text using LLM backend (direct extraction)")
 
         # Initialize LLM client
-        inference = cast(str, conf["inference"])
-
         model_config = self._get_model_config(
             conf["models"],
-            backend,
-            inference,
             conf.get("model_override"),
             conf.get("provider_override"),
         )

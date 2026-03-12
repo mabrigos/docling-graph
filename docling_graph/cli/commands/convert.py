@@ -25,9 +25,7 @@ from ..validators import (
     validate_docling_config,
     validate_export_format,
     validate_extraction_contract,
-    validate_inference,
     validate_processing_mode,
-    validate_vlm_constraints,
 )
 
 logger = logging.getLogger(__name__)
@@ -62,10 +60,7 @@ def convert_command(
         ),
     ] = None,
     backend: Annotated[
-        str | None, typer.Option("--backend", "-b", help="Backend: 'llm' or 'vlm'.")
-    ] = None,
-    inference: Annotated[
-        str | None, typer.Option("--inference", "-i", help="Inference: 'local' or 'remote'.")
+        str | None, typer.Option("--backend", "-b", help="Backend: 'llm'.")
     ] = None,
     docling_pipeline: Annotated[
         str | None,
@@ -297,7 +292,7 @@ def convert_command(
     logger.debug("Starting convert command")
     logger.debug(f"Source: {source}, Template: {template}")
     logger.debug(
-        f"CLI args - Backend: {backend}, Inference: {inference}, Processing: {processing_mode}"
+        f"CLI args - Backend: {backend}, Processing: {processing_mode}"
     )
 
     rich_print("[green]--- Starting Docling-Graph Conversion ---[/green]")
@@ -315,7 +310,7 @@ def convert_command(
     processing_mode_val = processing_mode or defaults.get("processing_mode", "many-to-one")
     extraction_contract_val = extraction_contract or defaults.get("extraction_contract", "direct")
     backend_val = backend or defaults.get("backend", "llm")
-    inference_val = inference or defaults.get("inference", "local")
+    inference_val = "remote"
     export_format_val = export_format or defaults.get("export_format", "csv")
 
     # Docling settings
@@ -457,12 +452,10 @@ def convert_command(
     processing_mode_val = validate_processing_mode(processing_mode_val)
     extraction_contract_val = validate_extraction_contract(extraction_contract_val)
     backend_val = validate_backend_type(backend_val)
-    inference_val = validate_inference(inference_val)
     docling_pipeline_val = validate_docling_config(docling_pipeline_val)
     export_format_val = validate_export_format(export_format_val)
-    validate_vlm_constraints(backend_val, inference_val)
 
-    logger.debug(f"Validated configuration - Backend: {backend_val}, Inference: {inference_val}")
+    logger.debug(f"Validated configuration - Backend: {backend_val}")
     logger.debug(f"Processing mode: {processing_mode_val}, Export format: {export_format_val}")
 
     # Detect and display input type
@@ -481,7 +474,6 @@ def convert_command(
     rich_print(f"  • Input Type: [cyan]{input_type_display}[/cyan]")
     rich_print(f"  • Docling: [cyan]{docling_pipeline_val}[/cyan]")
     rich_print(f"  • Processing: [cyan]{processing_mode_val}[/cyan]")
-    rich_print(f"  • Inference: [cyan]{inference_val}[/cyan]")
     rich_print(f"  • Export: [cyan]{export_format_val}[/cyan]")
     rich_print(f"  • Reverse edges: [cyan]{reverse_edges}[/cyan]")
 
@@ -556,7 +548,6 @@ def convert_command(
         source=str(source),
         template=template,
         backend=backend_val,
-        inference=inference_val,
         processing_mode=processing_mode_val,
         extraction_contract=extraction_contract_val,
         docling_config=docling_pipeline_val,
@@ -601,13 +592,13 @@ def convert_command(
         output_dir=str(output_dir),
     )
 
-    logger.debug(f"PipelineConfig created: backend={cfg.backend}, inference={cfg.inference}")
+    logger.debug(f"PipelineConfig created: backend={cfg.backend}")
     logger.debug(f"Output directory: {cfg.output_dir}")
 
     if show_llm_config and backend_val == "llm":
         from docling_graph.llm_clients.config import resolve_effective_model_config
 
-        selection = cfg.models.llm.local if cfg.inference == "local" else cfg.models.llm.remote
+        selection = cfg.models.llm.remote
         resolved_provider = provider or selection.provider
         resolved_model = model or selection.model
         effective = resolve_effective_model_config(

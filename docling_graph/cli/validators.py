@@ -13,8 +13,6 @@ from .constants import (
     DOCLING_PIPELINES,
     EXPORT_FORMATS,
     EXTRACTION_CONTRACTS,
-    INFERENCE_LOCATIONS,
-    LOCAL_PROVIDERS,
     PROCESSING_MODES,
 )
 from .dependencies import INFERENCE_PROVIDERS, OPTIONAL_DEPS, get_missing_dependencies
@@ -23,7 +21,6 @@ from .dependencies import INFERENCE_PROVIDERS, OPTIONAL_DEPS, get_missing_depend
 VALIDATION_SETS = {
     "processing_mode": (PROCESSING_MODES, "processing mode"),
     "backend": (BACKENDS, "backend type"),
-    "inference": (INFERENCE_LOCATIONS, "inference location"),
     "docling_config": (DOCLING_PIPELINES, "docling config"),
     "extraction_contract": (EXTRACTION_CONTRACTS, "extraction contract"),
     "export_format": (EXPORT_FORMATS, "export format"),
@@ -50,32 +47,17 @@ def _make_validator(key: str) -> Callable[[str], str]:
 # Create validators
 validate_processing_mode = _make_validator("processing_mode")
 validate_backend_type = _make_validator("backend")
-validate_inference = _make_validator("inference")
 validate_docling_config = _make_validator("docling_config")
 validate_extraction_contract = _make_validator("extraction_contract")
 validate_export_format = _make_validator("export_format")
 
 
-def validate_vlm_constraints(backend: str, inference: str) -> None:
-    """Validate VLM-specific constraints."""
-    if backend == "vlm" and inference == "remote":
-        rich_print("[red]Error:[/red] VLM (Vision-Language Model) only supports local inference.")
-        rich_print("Please use '--inference local' or switch to '--backend llm'.")
-        raise typer.Exit(code=1)
-
-
-def validate_provider(provider: str, inference: str) -> str:
-    """Validate provider choice.
-
-    Ensures that the provider is valid for the selected inference type.
-    Raises ValueError for invalid combinations so that CLI commands and tests
-    can fail fast with clear feedback.
-    """
-    valid_providers = LOCAL_PROVIDERS if inference == "local" else API_PROVIDERS
-    if provider not in valid_providers:
+def validate_provider(provider: str) -> str:
+    """Validate provider choice against API providers."""
+    if provider not in API_PROVIDERS:
         raise ValueError(
-            f"Invalid provider '{provider}' for inference='{inference}'. "
-            f"Expected one of: {', '.join(sorted(valid_providers))}."
+            f"Invalid provider '{provider}'. "
+            f"Expected one of: {', '.join(sorted(API_PROVIDERS))}."
         )
     return provider
 
@@ -88,16 +70,13 @@ def check_provider_installed(provider: str) -> bool:
 
 def get_provider_from_config(config_dict: dict) -> Tuple[str, str]:
     """Extract provider and inference type from config."""
-    defaults = config_dict.get("defaults", {})
-    inference_type = defaults.get("inference", "remote")
     models = config_dict.get("models", {})
     llm_config = models.get("llm", {})
 
-    inference_key = "local" if inference_type == "local" else "remote"
-    config = llm_config.get(inference_key, {})
+    config = llm_config.get("remote", {})
     provider = config.get("provider", "")
 
-    return provider, inference_type
+    return provider, "remote"
 
 
 def validate_config_dependencies(config_dict: dict) -> Tuple[bool, str]:

@@ -1413,8 +1413,8 @@ class LlmBackend:
         Clean up LLM client resources.
 
         Note: Most LLM clients use stateless HTTP APIs and don't require cleanup.
-        This method is provided for consistency with VlmBackend and handles any
-        clients that may have cleanup methods.
+        Most LLM clients use stateless HTTP APIs and don't require cleanup.
+        This method handles any clients that may have cleanup methods.
         """
         try:
             # Release the client reference

@@ -11,11 +11,9 @@ from rich import print as rich_print
 
 from ....protocols import (
     Backend,
-    ExtractionBackendProtocol,
     TextExtractionBackendProtocol,
     get_backend_type,
     is_llm_backend,
-    is_vlm_backend,
 )
 from ..document_processor import DocumentProcessor
 from ..extractor_base import BaseExtractor
@@ -27,11 +25,10 @@ class OneToOneStrategy(BaseExtractor):
     """
 
     def __init__(self, backend: Backend, docling_config: str = "default") -> None:
-        """Initialize with a backend (VlmBackend or LlmBackend).
+        """Initialize with an LLM backend.
 
         Args:
-            backend: Extraction backend instance implementing either
-                ExtractionBackendProtocol or TextExtractionBackendProtocol.
+            backend: LLM extraction backend.
             docling_config: Docling pipeline configuration ('ocr' or 'vision').
         """
         super().__init__()  # Initialize base extractor with trace_data attribute
@@ -49,8 +46,7 @@ class OneToOneStrategy(BaseExtractor):
     ) -> Tuple[List[BaseModel], DoclingDocument | None]:
         """Extract data using one-to-one strategy.
 
-        For VLM: Uses direct VLM extraction (already page-based).
-        For LLM: Converts to markdown and processes each page separately.
+        Converts to markdown and processes each page separately.
 
         Args:
             source: Path to the source document.
@@ -62,28 +58,11 @@ class OneToOneStrategy(BaseExtractor):
                 - The DoclingDocument object used during extraction (or None if extraction failed).
         """
         try:
-            if is_vlm_backend(self.backend):
-                rich_print("[blue][OneToOneStrategy][/blue] Using VLM backend for extraction")
-                return self._extract_with_vlm(self.backend, source, template)
-            elif is_llm_backend(self.backend):
-                rich_print("[blue][OneToOneStrategy][/blue] Using LLM backend for extraction")
-                return self._extract_with_llm(self.backend, source, template)
-            else:
-                backend_class = self.backend.__class__.__name__
-                raise TypeError(
-                    f"Backend '{backend_class}' does not implement a recognized extraction protocol. "
-                    "Expected either a VLM or LLM backend."
-                )
+            rich_print("[blue][OneToOneStrategy][/blue] Using LLM backend for extraction")
+            return self._extract_with_llm(self.backend, source, template)
         except Exception as e:
             rich_print(f"[red][OneToOneStrategy][/red] Extraction error: {e}")
             return [], None
-
-    def _extract_with_vlm(
-        self, backend: ExtractionBackendProtocol, source: str, template: Type[BaseModel]
-    ) -> Tuple[List[BaseModel], DoclingDocument | None]:
-        """VLM path: delegate to document-level extraction."""
-        models = backend.extract_from_document(source, template)
-        return models, None
 
     def _extract_with_llm(
         self, backend: TextExtractionBackendProtocol, source: str, template: Type[BaseModel]

@@ -31,7 +31,6 @@ authors = [
 ]
 requires-python = ">=3.10,<4.0"
 dependencies = [
-    "docling[vlm]>=2.70.0,<3.0.0",
     "docling-core[chunking, chunking-openai]>=2.50.0,<3.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "networkx>=3.0.0,<4.0.0",
@@ -39,6 +38,7 @@ dependencies = [
     "typer[all]>=0.12,<1.0.0",
     "python-dotenv>=1.0,<2.0",
     "litellm>=1.0.0,<2.0.0",
+    "boto3>=1.28.57",
     "pyyaml>=6.0,<7.0",
     "aiofiles>=24.0.0,<26.0.0",
 ]

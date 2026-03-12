@@ -16,13 +16,10 @@ from pydantic import BaseModel
 
 from ....protocols import (
     Backend,
-    ExtractionBackendProtocol,
     TextExtractionBackendProtocol,
     get_backend_type,
     is_llm_backend,
-    is_vlm_backend,
 )
-from ...utils.dict_merger import merge_pydantic_models
 from ..contracts.delta.strategy_ops import extract_delta_from_document, extract_delta_from_text
 from ..document_processor import DocumentProcessor
 from ..extractor_base import BaseExtractor
@@ -50,7 +47,7 @@ class ManyToOneStrategy(BaseExtractor):
         Initialize extraction strategy.
 
         Args:
-            backend: Extraction backend (VLM or LLM)
+            backend: LLM extraction backend.
             docling_config: Docling pipeline config ("ocr" or "vision")
         """
         super().__init__()
@@ -58,7 +55,6 @@ class ManyToOneStrategy(BaseExtractor):
 
         # Cache protocol checks
         self._is_llm = is_llm_backend(self.backend)
-        self._is_vlm = is_vlm_backend(self.backend)
         self._backend_type = get_backend_type(self.backend)
         self._extraction_contract = extraction_contract
 
@@ -91,64 +87,13 @@ class ManyToOneStrategy(BaseExtractor):
                 - DoclingDocument object (or None if extraction failed)
         """
         try:
-            if self._is_vlm:
-                logger.info("Using VLM backend")
-                return self._extract_with_vlm(
-                    cast(ExtractionBackendProtocol, self.backend), source, template
-                )
-
-            elif self._is_llm:
-                logger.info("Using LLM backend (%s extraction)", self._extraction_contract)
-                return self._extract_with_llm(
-                    cast(TextExtractionBackendProtocol, self.backend), source, template
-                )
-
-            else:
-                backend_class = self.backend.__class__.__name__
-                raise TypeError(
-                    f"Backend '{backend_class}' does not implement a recognized extraction protocol"
-                )
+            logger.info("Using LLM backend (%s extraction)", self._extraction_contract)
+            return self._extract_with_llm(
+                cast(TextExtractionBackendProtocol, self.backend), source, template
+            )
 
         except Exception as e:
             logger.error(f"Extraction error: {e}")
-            import traceback
-
-            logger.debug(f"Traceback:\n{traceback.format_exc()}")
-            return [], None
-
-    def _extract_with_vlm(
-        self, backend: ExtractionBackendProtocol, source: str, template: Type[BaseModel]
-    ) -> Tuple[list[BaseModel], DoclingDocument | None]:
-        """Extract using VLM backend."""
-        try:
-            logger.info("Running VLM extraction...")
-            models = backend.extract_from_document(source, template)
-
-            if not models:
-                logger.warning("No models extracted by VLM")
-                return [], None
-
-            if len(models) == 1:
-                logger.info("Single-page document extracted")
-                return models, None
-
-            logger.info(f"Merging {len(models)} page models...")
-            merged_model = merge_pydantic_models(
-                models,
-                template,
-                description_merge_fields={"description", "summary"},
-                description_merge_max_length=4096,
-            )
-
-            if merged_model:
-                logger.info("Successfully merged VLM page models")
-                return [merged_model], None
-            else:
-                logger.warning("Merge failed - returning all page models (zero data loss)")
-                return models, None
-
-        except Exception as e:
-            logger.error(f"VLM extraction failed: {e}")
             import traceback
 
             logger.debug(f"Traceback:\n{traceback.format_exc()}")

@@ -12,17 +12,12 @@ from rich import print as rich_print
 
 from .constants import (
     API_PROVIDERS,
-    BACKENDS,
     DELTA_RESOLVER_MODES,
     DOCLING_PIPELINES,
     EXPORT_FORMATS,
     EXTRACTION_CONTRACTS,
-    INFERENCE_LOCATIONS,
-    LOCAL_PROVIDER_DEFAULTS,
-    LOCAL_PROVIDERS,
     PROCESSING_MODES,
     PROVIDER_DEFAULT_MODELS,
-    VLM_DEFAULT_MODEL,
 )
 
 
@@ -30,7 +25,6 @@ from .constants import (
 def _get_provider_defaults() -> dict:
     """Cache provider defaults to avoid repeated lookups."""
     return {
-        "local": LOCAL_PROVIDER_DEFAULTS,
         "remote": PROVIDER_DEFAULT_MODELS,
     }
 
@@ -61,7 +55,7 @@ class ConfigurationBuilder:
 
         # Build all sections
         defaults = self._build_defaults()
-        models = self._build_models(defaults["backend"], defaults["inference"])
+        models = self._build_models()
         defaults["export_format"] = self._build_export_format()
         docling = self._build_docling()
         output = self._build_output()
@@ -129,38 +123,8 @@ class ConfigurationBuilder:
         )
         delta_defaults = self._build_delta_defaults(extraction_contract)
 
-        backend = self._prompt_option(
-            PromptConfig(
-                label="Backend Type",
-                description="Which AI backend should be used?",
-                options=list(BACKENDS),
-                default="llm",
-                step_num=self.step_counter,
-                option_help={
-                    "llm": "Language Model (text-based)",
-                    "vlm": "Vision-Language Model (image-based)",
-                },
-            )
-        )
-
-        # VLM constraint: only local inference
-        if backend == "vlm":
-            rich_print("[yellow]Note: VLM backend only supports local inference for now.[/yellow]")
-            inference = "local"
-        else:
-            inference = self._prompt_option(
-                PromptConfig(
-                    label="Inference Location",
-                    description="How should models be executed?",
-                    options=list(INFERENCE_LOCATIONS),
-                    default="remote",
-                    step_num=self.step_counter,
-                    option_help={
-                        "local": "Run on your machine",
-                        "remote": "Use cloud APIs",
-                    },
-                )
-            )
+        backend = "llm"
+        inference = "remote"
 
         return {
             "processing_mode": processing_mode,
@@ -269,7 +233,7 @@ class ConfigurationBuilder:
                 step_num=self.step_counter,
                 option_help={
                     "ocr": "OCR pipeline (standard documents - faster)",
-                    "vision": "VLM pipeline (complex layouts - slower)",
+                    "vision": "Vision pipeline (complex layouts - slower)",
                 },
             )
         )
@@ -291,74 +255,9 @@ class ConfigurationBuilder:
             },
         }
 
-    def _build_models(self, backend: str, inference: str) -> Dict[str, Any]:
-        """Build model configuration based on backend and inference type."""
-        if backend == "vlm":
-            return self._build_vlm_config()
-        elif inference == "local":
-            return self._build_local_llm_config()
-        else:
-            return self._build_remote_llm_config()
-
-    def _build_vlm_config(self) -> Dict[str, Any]:
-        """Build VLM configuration."""
-        model = typer.prompt(
-            "Select VLM model",
-            default=VLM_DEFAULT_MODEL,
-        )
-        return self._build_model_structure(
-            vlm_model=model,
-            vlm_provider="docling",
-            llm_local_model=LOCAL_PROVIDER_DEFAULTS["vllm"],
-            llm_local_provider="vllm",
-            llm_remote_model=PROVIDER_DEFAULT_MODELS["mistral"],
-            llm_remote_provider="mistral",
-        )
-
-    def _build_local_llm_config(self) -> Dict[str, Any]:
-        """Build local LLM configuration."""
-        provider = self._prompt_option(
-            PromptConfig(
-                label="Local LLM Provider",
-                description="Select provider (LiteLLM routing)",
-                options=list(LOCAL_PROVIDERS),
-                default="vllm",
-                step_num=self.step_counter,
-                option_help={
-                    "vllm": "Use vLLM server (OpenAI-compatible)",
-                    "ollama": "Use Ollama server (local inference)",
-                    "lmstudio": "Use LM Studio local server (OpenAI-compatible)",
-                    "custom": "Enter a custom LiteLLM provider ID",
-                },
-            )
-        )
-
-        if provider == "custom":
-            provider_id = typer.prompt(
-                "Enter LiteLLM provider id (e.g., ollama, vllm, openai)",
-                default="ollama",
-            )
-            default_model = LOCAL_PROVIDER_DEFAULTS.get(provider_id, "llama3.1:8b")
-            model = typer.prompt(
-                f"Enter model for {provider_id}",
-                default=default_model,
-            )
-            provider = provider_id
-        else:
-            default_model = LOCAL_PROVIDER_DEFAULTS.get(provider, LOCAL_PROVIDER_DEFAULTS["vllm"])
-            model = typer.prompt(
-                f"Select model for {provider}",
-                default=default_model,
-            )
-
-        return self._build_model_structure(
-            vlm_model=VLM_DEFAULT_MODEL,
-            vlm_provider="docling",
-            llm_local_model=model,
-            llm_local_provider=provider,
-            llm_remote_model=PROVIDER_DEFAULT_MODELS["mistral"],
-            llm_remote_provider="mistral",
-        )
+    def _build_models(self) -> Dict[str, Any]:
+        """Build model configuration."""
+        return self._build_remote_llm_config()
 
     def _build_remote_llm_config(self) -> Dict[str, Any]:
         """Build remote LLM configuration."""
@@ -374,6 +273,7 @@ class ConfigurationBuilder:
                     "openai": "Use OpenAI API",
                     "gemini": "Use Gemini API",
                     "watsonx": "Use IBM watsonx",
+                    "bedrock": "Use AWS Bedrock",
                     "custom": "Enter a custom LiteLLM provider ID",
                 },
             )
@@ -404,36 +304,18 @@ class ConfigurationBuilder:
             )
 
         return self._build_model_structure(
-            vlm_model=VLM_DEFAULT_MODEL,
-            vlm_provider="docling",
-            llm_local_model=LOCAL_PROVIDER_DEFAULTS["vllm"],
-            llm_local_provider="vllm",
             llm_remote_model=model,
             llm_remote_provider=provider,
         )
 
     @staticmethod
     def _build_model_structure(
-        vlm_model: str,
-        vlm_provider: str,
-        llm_local_model: str,
-        llm_local_provider: str,
         llm_remote_model: str,
         llm_remote_provider: str,
     ) -> Dict[str, Any]:
         """Build the standard model configuration structure."""
         return {
-            "vlm": {
-                "local": {
-                    "model": vlm_model,
-                    "provider": vlm_provider,
-                }
-            },
             "llm": {
-                "local": {
-                    "model": llm_local_model,
-                    "provider": llm_local_provider,
-                },
                 "remote": {
                     "model": llm_remote_model,
                     "provider": llm_remote_provider,

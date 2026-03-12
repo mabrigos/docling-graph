@@ -17,7 +17,7 @@ from .llm_clients.config import LlmRuntimeOverrides
 class BackendConfig(BaseModel):
     """Configuration for an extraction backend."""
 
-    provider: str = Field(..., description="Backend provider (e.g., 'ollama', 'mistral', 'vlm')")
+    provider: str = Field(..., description="Backend provider (e.g., 'bedrock', 'mistral', 'openai')")
     model: str = Field(..., description="Model name or path")
     api_key: str | None = Field(None, description="API key, if required")
     base_url: str | None = Field(None, description="Base URL for API, if required")
@@ -41,29 +41,12 @@ class ModelConfig(BaseModel):
 
 
 class LLMConfig(BaseModel):
-    """LLM model configurations for local and remote inference."""
+    """LLM model configuration for remote inference."""
 
-    local: ModelConfig = Field(
-        default_factory=lambda: ModelConfig(
-            model="ibm-granite/granite-4.0-1b",
-            provider="vllm",
-        )
-    )
     remote: ModelConfig = Field(
         default_factory=lambda: ModelConfig(
-            model="mistral-small-latest",
-            provider="mistral",
-        )
-    )
-
-
-class VLMConfig(BaseModel):
-    """VLM model configuration."""
-
-    local: ModelConfig = Field(
-        default_factory=lambda: ModelConfig(
-            model="numind/NuExtract-2.0-8B",
-            provider="docling",
+            model="anthropic.claude-3-sonnet-20240229-v1:0",
+            provider="bedrock",
         )
     )
 
@@ -72,7 +55,6 @@ class ModelsConfig(BaseModel):
     """Complete models configuration."""
 
     llm: LLMConfig = Field(default_factory=LLMConfig)
-    vlm: VLMConfig = Field(default_factory=VLMConfig)
 
 
 # Staged (3-pass) preset defaults: (pass_retries, workers, nodes_fill_cap, id_shard_size).
@@ -115,8 +97,7 @@ class PipelineConfig(BaseModel):
     )
 
     # Core processing settings (with defaults)
-    backend: Literal["llm", "vlm"] = Field(default="llm")
-    inference: Literal["local", "remote"] = Field(default="local")
+    backend: Literal["llm"] = Field(default="llm")
     processing_mode: Literal["one-to-one", "many-to-one"] = Field(default="many-to-one")
     extraction_contract: Literal["direct", "staged", "delta"] = Field(default="direct")
 
@@ -359,11 +340,7 @@ class PipelineConfig(BaseModel):
         return str(v)
 
     @model_validator(mode="after")
-    def _validate_vlm_constraints(self) -> Self:
-        if self.backend == "vlm" and self.inference == "remote":
-            raise ValueError(
-                "VLM backend currently only supports local inference. Use inference='local' or backend='llm'."
-            )
+    def _validate_config(self) -> Self:
         return self
 
     def to_metadata_config_dict(
@@ -423,7 +400,6 @@ class PipelineConfig(BaseModel):
             "source": self.source,
             "template": self.template,
             "backend": self.backend,
-            "inference": self.inference,
             "processing_mode": self.processing_mode,
             "extraction_contract": self.extraction_contract,
             "docling_config": self.docling_config,
@@ -507,7 +483,6 @@ class PipelineConfig(BaseModel):
         return {
             "defaults": {
                 "backend": default_config.backend,
-                "inference": default_config.inference,
                 "processing_mode": default_config.processing_mode,
                 "extraction_contract": default_config.extraction_contract,
                 "export_format": default_config.export_format,

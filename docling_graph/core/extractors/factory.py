@@ -8,7 +8,6 @@ from rich import print as rich_print
 
 from ...protocols import Backend, LLMClientProtocol
 from .backends.llm_backend import LlmBackend
-from .backends.vlm_backend import VlmBackend
 from .extractor_base import BaseExtractor
 from .strategies.many_to_one import ManyToOneStrategy
 from .strategies.one_to_one import OneToOneStrategy
@@ -20,7 +19,7 @@ class ExtractorFactory:
     @staticmethod
     def create_extractor(
         processing_mode: Literal["one-to-one", "many-to-one"],
-        backend_name: Literal["vlm", "llm"],
+        backend_name: Literal["llm"],
         extraction_contract: Literal["direct", "staged", "delta"] = "direct",
         structured_output: bool = True,
         structured_sparse_check: bool = True,
@@ -36,11 +35,11 @@ class ExtractorFactory:
 
         Args:
             processing_mode (str): 'one-to-one' or 'many-to-one'
-            backend_name (str): 'vlm' or 'llm'
-            extraction_contract (str): 'direct', 'staged', or 'delta' (LLM only)
+            backend_name (str): 'llm'
+            extraction_contract (str): 'direct', 'staged', or 'delta'
             staged_config (dict): Optional staged extraction tuning config
-            model_name (str): Model name for VLM (optional)
-            llm_client (LLMClientProtocol): LLM client instance (optional)
+            model_name (str): Model name (optional)
+            llm_client (LLMClientProtocol): LLM client instance (required)
             docling_config (str): Docling pipeline configuration ('ocr' or 'vision')
 
         Returns:
@@ -48,33 +47,25 @@ class ExtractorFactory:
         """
 
         # Create backend instance
-        backend_obj: Backend
-        if backend_name == "vlm":
-            if not model_name:
-                raise ValueError("VLM requires model_name parameter")
-            backend_obj = VlmBackend(model_name=model_name)
-        elif backend_name == "llm":
-            if not llm_client:
-                raise ValueError("LLM requires llm_client parameter")
-            effective_contract = extraction_contract
-            if processing_mode != "many-to-one" and extraction_contract in {"staged", "delta"}:
-                rich_print(
-                    "[yellow][ExtractorFactory][/yellow] "
-                    "Staged/delta contracts currently apply only to many-to-one; using direct."
-                )
-                effective_contract = "direct"
-            backend_obj = cast(
-                Backend,
-                LlmBackend(
-                    llm_client=llm_client,
-                    extraction_contract=effective_contract,
-                    staged_config=staged_config,
-                    structured_output=structured_output,
-                    structured_sparse_check=structured_sparse_check,
-                ),
+        if not llm_client:
+            raise ValueError("LLM requires llm_client parameter")
+        effective_contract = extraction_contract
+        if processing_mode != "many-to-one" and extraction_contract in {"staged", "delta"}:
+            rich_print(
+                "[yellow][ExtractorFactory][/yellow] "
+                "Staged/delta contracts currently apply only to many-to-one; using direct."
             )
-        else:
-            raise ValueError(f"Unknown backend: {backend_name}")
+            effective_contract = "direct"
+        backend_obj: Backend = cast(
+            Backend,
+            LlmBackend(
+                llm_client=llm_client,
+                extraction_contract=effective_contract,
+                staged_config=staged_config,
+                structured_output=structured_output,
+                structured_sparse_check=structured_sparse_check,
+            ),
+        )
 
         # Create strategy with docling_config
         extractor: BaseExtractor
@@ -88,7 +79,7 @@ class ExtractorFactory:
             extractor = ManyToOneStrategy(
                 backend=backend_obj,
                 docling_config=docling_config,
-                extraction_contract=effective_contract if backend_name == "llm" else "direct",
+                extraction_contract=effective_contract,
                 use_chunking=use_chunking,
                 chunk_max_tokens=chunk_max_tokens,
             )

@@ -18,23 +18,22 @@ EXTRACTION_CONTRACTS: Final[list[str]] = ["direct", "staged", "delta"]
 DELTA_RESOLVER_MODES: Final[list[str]] = ["off", "fuzzy", "semantic", "chain"]
 
 # Backend types (enum for validation)
-BACKENDS: Final[list[str]] = ["llm", "vlm"]
+BACKENDS: Final[list[str]] = ["llm"]
 
 # Inference locations (enum for validation)
-INFERENCE_LOCATIONS: Final[list[str]] = ["local", "remote"]
+INFERENCE_LOCATIONS: Final[list[str]] = ["remote"]
 
 # Export formats (enum for validation)
 EXPORT_FORMATS: Final[list[str]] = ["csv", "cypher"]
 
 # Docling pipeline configurations (enum for validation)
-DOCLING_PIPELINES: Final[list[str]] = ["ocr", "vision"]
+DOCLING_PIPELINES: Final[list[str]] = ["ocr"]
 
 # Docling export formats (enum for validation)
 DOCLING_EXPORT_FORMATS: Final[list[str]] = ["markdown", "json", "document"]
 
 # Providers (enum for validation)
-LOCAL_PROVIDERS: Final[list[str]] = ["vllm", "ollama", "lmstudio", "custom"]
-API_PROVIDERS: Final[list[str]] = ["mistral", "openai", "gemini", "watsonx", "custom"]
+API_PROVIDERS: Final[list[str]] = ["mistral", "openai", "gemini", "watsonx", "bedrock", "custom"]
 
 # Provider-specific default models (for CLI prompts)
 PROVIDER_DEFAULT_MODELS: Final[dict[str, str]] = {
@@ -42,14 +41,5 @@ PROVIDER_DEFAULT_MODELS: Final[dict[str, str]] = {
     "openai": "gpt-4o",
     "gemini": "gemini-2.5-flash",
     "watsonx": "ibm/granite-4-h-small",
+    "bedrock": "anthropic.claude-3-sonnet-20240229-v1:0",
 }
-
-# Local provider default models
-LOCAL_PROVIDER_DEFAULTS: Final[dict[str, str]] = {
-    "vllm": "ibm-granite/granite-4.0-1b",
-    "ollama": "llama-3.1-8b",
-    "lmstudio": "local-model",
-}
-
-# VLM default model
-VLM_DEFAULT_MODEL: Final[str] = "numind/NuExtract-2.0-2B"

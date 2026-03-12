@@ -8,12 +8,8 @@ from typing import Any, List, Literal, Optional, cast, overload
 
 from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import (
-    PdfPipelineOptions,
-    VlmPipelineOptions,
-)
+from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
-from docling.pipeline.vlm_pipeline import VlmPipeline
 from docling_core.types.doc import DoclingDocument
 from rich import print as rich_print
 
@@ -33,8 +29,7 @@ class DocumentProcessor:
         Initialize document processor with specified pipeline.
 
         Args:
-            docling_config (str): Either "vision" or "ocr" by default.
-                vision: Uses VLM pipeline for complex layouts.
+            docling_config (str): Pipeline configuration, "ocr" by default.
                 ocr: Uses classic OCR pipeline for standard documents.
             chunker_config (dict): Configuration for DocumentChunker.
                 Example: {
@@ -55,42 +50,26 @@ class DocumentProcessor:
         if chunker_config:
             self.chunker = DocumentChunker(**chunker_config)
 
-        if docling_config == "vision":
-            # VLM Pipeline - Best for complex layouts and images
-            self.converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(
-                        pipeline_cls=VlmPipeline,
-                    ),
-                    InputFormat.IMAGE: PdfFormatOption(
-                        pipeline_cls=VlmPipeline,
-                    ),
-                }
-            )
-            rich_print(
-                "[blue][DocumentProcessor][/blue] Initialized with [magenta]Vision pipeline[/magenta]"
-            )
-        else:
-            # Default Pipeline - Most accurate with OCR for standard documents
-            pipeline_options = PdfPipelineOptions()
-            pipeline_options.do_ocr = True
-            pipeline_options.do_table_structure = True
-            # Note: do_cell_matching attribute removed in docling v2.60.0+
-            # pipeline_options.table_structure_options.do_cell_matching = True
-            pipeline_options.ocr_options.lang = ["en", "fr"]
-            pipeline_options.accelerator_options = AcceleratorOptions(
-                num_threads=4, device=AcceleratorDevice.AUTO
-            )
+        # Default Pipeline - Most accurate with OCR for standard documents
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = True
+        pipeline_options.do_table_structure = True
+        # Note: do_cell_matching attribute removed in docling v2.60.0+
+        # pipeline_options.table_structure_options.do_cell_matching = True
+        pipeline_options.ocr_options.lang = ["en", "fr"]
+        pipeline_options.accelerator_options = AcceleratorOptions(
+            num_threads=4, device=AcceleratorDevice.AUTO
+        )
 
-            self.converter = DocumentConverter(
-                format_options={
-                    InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
-                    InputFormat.IMAGE: ImageFormatOption(),
-                }
-            )
-            rich_print(
-                "[blue][DocumentProcessor][/blue] Initialized with [green]Classic OCR pipeline[/green] (English, French)"
-            )
+        self.converter = DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options),
+                InputFormat.IMAGE: ImageFormatOption(),
+            }
+        )
+        rich_print(
+            "[blue][DocumentProcessor][/blue] Initialized with [green]Classic OCR pipeline[/green] (English, French)"
+        )
 
     def convert_to_docling_doc(self, source: str) -> DoclingDocument:
         """

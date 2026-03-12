@@ -165,7 +165,7 @@ def _summarize_pipeline_artifacts(artifacts: dict[str, Any]) -> dict[str, Any]:
         "source": start_payload.get("source"),
         "processing_mode": start_payload.get("processing_mode"),
         "backend": start_payload.get("backend"),
-        "inference": start_payload.get("inference"),
+
         "debug": start_payload.get("debug"),
     }
     if failure_payload is not None:

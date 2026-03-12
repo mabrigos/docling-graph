@@ -125,6 +125,11 @@ class ProviderConnection(BaseModel):
     project_id: str | None = None
     project_id_env: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)
+    # AWS/Bedrock-specific fields
+    aws_region: str | None = None
+    aws_region_env: str | None = None
+    aws_role_arn: str | None = None
+    aws_role_arn_env: str | None = None
 
 
 class ConnectionOverrides(BaseModel):
@@ -137,6 +142,9 @@ class ConnectionOverrides(BaseModel):
     organization: str | None = None
     project_id: str | None = None
     headers: dict[str, str] | None = None
+    # AWS/Bedrock-specific overrides
+    aws_region: str | None = None
+    aws_role_arn: str | None = None
 
 
 class ProviderDefinition(BaseModel):
@@ -189,6 +197,9 @@ class ResolvedConnection(BaseModel):
     organization: str | None = None
     project_id: str | None = None
     headers: dict[str, str] = Field(default_factory=dict)
+    # AWS/Bedrock-specific resolved fields
+    aws_region: str | None = None
+    aws_role_arn: str | None = None
 
 
 class EffectiveModelConfig(BaseModel):
@@ -236,6 +247,17 @@ _warned_models: set[str] = set()
 def _build_default_registry() -> ProviderRegistry:
     return ProviderRegistry(
         providers={
+            "bedrock": ProviderDefinition(
+                requires_api_key=False,
+                connection=ProviderConnection(
+                    api_key_env="AWS_BEARER_TOKEN_BEDROCK",
+                    aws_region="us-east-1",
+                    aws_region_env="AWS_REGION_NAME",
+                    aws_role_arn_env="AWS_ROLE_ARN",
+                ),
+                tokenizer="sentence-transformers/all-MiniLM-L6-v2",
+                merge_threshold=0.95,
+            ),
             "mistral": ProviderDefinition(
                 requires_api_key=True,
                 connection=ProviderConnection(api_key_env="MISTRAL_API_KEY"),
@@ -264,35 +286,6 @@ def _build_default_registry() -> ProviderRegistry:
                     base_url_env="WATSONX_URL",
                 ),
                 tokenizer="ibm-granite/granite-embedding-278m-multilingual",
-                merge_threshold=0.95,
-            ),
-            "vllm": ProviderDefinition(
-                requires_api_key=False,
-                connection=ProviderConnection(
-                    base_url="http://localhost:8000/v1",
-                    base_url_env="VLLM_BASE_URL",
-                    api_key=SecretStr("EMPTY"),
-                ),
-                tokenizer="sentence-transformers/all-MiniLM-L6-v2",
-                merge_threshold=0.95,
-            ),
-            "ollama": ProviderDefinition(
-                requires_api_key=False,
-                connection=ProviderConnection(
-                    base_url="http://localhost:11434",
-                    base_url_env="OLLAMA_BASE_URL",
-                ),
-                tokenizer="sentence-transformers/all-MiniLM-L6-v2",
-                merge_threshold=0.95,
-            ),
-            "lmstudio": ProviderDefinition(
-                requires_api_key=False,
-                connection=ProviderConnection(
-                    base_url="http://localhost:1234/v1",
-                    base_url_env="LM_STUDIO_API_BASE",
-                    api_key_env="LM_STUDIO_API_KEY",
-                ),
-                tokenizer="sentence-transformers/all-MiniLM-L6-v2",
                 merge_threshold=0.95,
             ),
         }
@@ -359,18 +352,10 @@ def build_litellm_model_name(
 ) -> str:
     model_name = model_id
     provider_id = provider_id.lower()
-    base_url = connection.base_url if connection else None
 
-    if provider_id == "vllm" and base_url:
-        if model_name.startswith("vllm/"):
-            model_name = model_name.removeprefix("vllm/")
-        if model_name.startswith("hosted_vllm/"):
-            model_name = model_name.removeprefix("hosted_vllm/")
-        model_name = f"hosted_vllm/{model_name}"
-    elif provider_id == "lmstudio":
-        if model_name.startswith("lm_studio/"):
-            model_name = model_name.removeprefix("lm_studio/")
-        model_name = f"lm_studio/{model_name}"
+    if provider_id == "bedrock":
+        if not model_name.startswith("bedrock/"):
+            model_name = f"bedrock/{model_name}"
     elif provider_id not in {"openai"} and not model_name.startswith(f"{provider_id}/"):
         model_name = f"{provider_id}/{model_name}"
     return model_name
@@ -415,6 +400,10 @@ def _resolve_connection(
     project_id = connection.project_id or _env_value(connection.project_id_env)
     headers = dict(connection.headers)
 
+    # AWS/Bedrock-specific resolution
+    aws_region = connection.aws_region or _env_value(connection.aws_region_env)
+    aws_role_arn = connection.aws_role_arn or _env_value(connection.aws_role_arn_env)
+
     # Fixed custom endpoint env vars for on-prem/OpenAI-compatible usage
     if provider_id.lower() == "openai":
         custom_base_url = _env_value(CUSTOM_LLM_BASE_URL_ENV)
@@ -436,6 +425,10 @@ def _resolve_connection(
             project_id = overrides.project_id
         if overrides.headers:
             headers.update(overrides.headers)
+        if overrides.aws_region is not None:
+            aws_region = overrides.aws_region
+        if overrides.aws_role_arn is not None:
+            aws_role_arn = overrides.aws_role_arn
 
     if provider.requires_api_key and not api_key:
         # In library and test contexts we allow configuration to be
@@ -461,6 +454,8 @@ def _resolve_connection(
         organization=organization,
         project_id=project_id,
         headers=headers,
+        aws_region=aws_region,
+        aws_role_arn=aws_role_arn,
     )
 
 

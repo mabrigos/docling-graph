@@ -16,31 +16,6 @@ from pydantic import BaseModel
 
 
 @runtime_checkable
-class ExtractionBackendProtocol(Protocol):
-    """Protocol for extraction backends that process entire documents.
-
-    This protocol is implemented by VLM backends that can process
-    documents directly without requiring markdown conversion.
-    """
-
-    def extract_from_document(self, source: str, template: Type[BaseModel]) -> List[BaseModel]:
-        """Extract structured data from a document.
-
-        Args:
-            source: Path to the source document.
-            template: Pydantic model template to extract into.
-
-        Returns:
-            List of extracted and validated Pydantic model instances.
-        """
-        ...
-
-    def cleanup(self) -> None:
-        """Clean up backend resources (GPU memory, connections, etc.)."""
-        ...
-
-
-@runtime_checkable
 class TextExtractionBackendProtocol(Protocol):
     """Protocol for extraction backends that process markdown/text.
 
@@ -50,7 +25,7 @@ class TextExtractionBackendProtocol(Protocol):
     """
 
     client: Any  # LLM client instance
-    extraction_contract: str  # "direct" | "staged" | "delta"; optional on some backends
+    extraction_contract: str  # "direct" | "staged" | "delta"
 
     def extract_from_markdown(
         self,
@@ -85,7 +60,7 @@ class TextExtractionBackendProtocol(Protocol):
 @runtime_checkable
 class LLMClientProtocol(Protocol):
     """
-    Protocol for LLM clients (Ollama, Mistral, OpenAI, etc.).
+    Protocol for LLM clients (Bedrock, Mistral, OpenAI, etc.).
 
     Minimal interface for JSON-based extraction.
     """
@@ -125,7 +100,7 @@ class ExtractorProtocol(Protocol):
     Extraction strategies (OneToOne, ManyToOne) must implement this protocol.
     """
 
-    backend: Any  # Backend instance (VLM or LLM)
+    backend: Any  # Backend instance (LLM)
 
     def extract(self, source: str, template: Type[BaseModel]) -> List[BaseModel]:
         """Extract structured data from a source document.
@@ -190,27 +165,8 @@ class DocumentProcessorProtocol(Protocol):
 # =============================================================================
 
 
-def is_vlm_backend(backend: Any) -> TypeGuard[ExtractionBackendProtocol]:
-    """Check if backend behaves like a VLM backend.
-
-    Uses duck typing so simple mocks in tests are recognized without
-    needing to implement every Protocol attribute (e.g., `cleanup`).
-
-    Args:
-        backend: Backend instance to check.
-
-    Returns:
-        True if backend provides a document-level extraction method.
-    """
-    return callable(getattr(backend, "extract_from_document", None))
-
-
 def is_llm_backend(backend: Any) -> TypeGuard[TextExtractionBackendProtocol]:
     """Check if backend behaves like an LLM backend.
-
-    Uses duck typing for test friendliness. Considered LLM if it can
-    extract from markdown; presence of a `client` attribute is optional
-    here and handled by callers as needed.
 
     Args:
         backend: Backend instance to check.
@@ -228,11 +184,9 @@ def get_backend_type(backend: Any) -> str:
         backend: Backend instance.
 
     Returns:
-        "vlm" if VLM backend, "llm" if LLM backend, "unknown" otherwise.
+        "llm" if LLM backend, "unknown" otherwise.
     """
-    if is_vlm_backend(backend):
-        return "vlm"
-    elif is_llm_backend(backend):
+    if is_llm_backend(backend):
         return "llm"
     else:
         return "unknown"
@@ -242,8 +196,8 @@ def get_backend_type(backend: Any) -> str:
 # Type Aliases for Clarity
 # =============================================================================
 
-# Backend can be either VLM or LLM
-Backend = ExtractionBackendProtocol | TextExtractionBackendProtocol
+# Backend is LLM
+Backend = TextExtractionBackendProtocol
 
 # Extractor strategies
 Extractor = ExtractorProtocol

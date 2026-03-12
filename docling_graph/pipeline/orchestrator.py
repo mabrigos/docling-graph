@@ -103,7 +103,6 @@ class PipelineOrchestrator:
                     "source": str(self.config.source),
                     "processing_mode": self.config.processing_mode,
                     "backend": self.config.backend,
-                    "inference": self.config.inference,
                     "debug": self.config.debug,
                 },
             )
@@ -138,22 +137,9 @@ class PipelineOrchestrator:
                 actual_model = self.config.model_override
                 actual_provider = self.config.provider_override
 
-                # If no overrides, get from models config based on backend and inference
                 if not actual_model or not actual_provider:
-                    if self.config.backend == "llm":
-                        if self.config.inference == "local":
-                            actual_model = actual_model or self.config.models.llm.local.model
-                            actual_provider = (
-                                actual_provider or self.config.models.llm.local.provider
-                            )
-                        else:  # remote
-                            actual_model = actual_model or self.config.models.llm.remote.model
-                            actual_provider = (
-                                actual_provider or self.config.models.llm.remote.provider
-                            )
-                    else:  # vlm
-                        actual_model = actual_model or self.config.models.vlm.local.model
-                        actual_provider = actual_provider or self.config.models.vlm.local.provider
+                    actual_model = actual_model or self.config.models.llm.remote.model
+                    actual_provider = actual_provider or self.config.models.llm.remote.provider
 
                 # Full effective config (all options including defaults) for reproducibility
                 full_config = self.config.to_metadata_config_dict(

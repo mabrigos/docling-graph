@@ -223,6 +223,12 @@ class LiteLLMClient:
         if connection.headers:
             request["headers"] = dict(connection.headers)
 
+        # AWS/Bedrock auth — passed as kwargs to litellm.completion() → boto3
+        if connection.aws_region:
+            request["aws_region_name"] = connection.aws_region
+        if connection.aws_role_arn:
+            request["aws_role_name"] = connection.aws_role_arn
+
         supported_fn = getattr(litellm, "get_supported_openai_params", None)
         if callable(supported_fn):
             try:
@@ -238,6 +244,8 @@ class LiteLLMClient:
                         "timeout",
                         "drop_params",
                         "response_format",
+                        "aws_region_name",
+                        "aws_role_name",
                     }
                     filtered = {key: value for key, value in request.items() if key in required}
                     filtered.update(
