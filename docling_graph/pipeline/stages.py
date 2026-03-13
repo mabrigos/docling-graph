@@ -527,6 +527,30 @@ class ExtractionStage(PipelineStage):
         )
         return client_class(model_config=effective_config)
 
+    def _create_llm_backend(self, context: PipelineContext) -> Any:
+        """Create a bare LLM backend without a full extractor.
+
+        Used for DoclingDocument JSON input when docling is not installed —
+        we only need the LLM client to call ``extract_from_markdown``.
+        """
+        from ..core.extractors.backends.llm_backend import LlmBackend
+
+        conf = context.config.to_dict()
+        model_config = self._get_model_config(
+            conf["models"],
+            conf.get("model_override"),
+            conf.get("provider_override"),
+        )
+        if context.config.llm_client is not None:
+            llm_client = context.config.llm_client
+        else:
+            llm_client = self._initialize_llm_client(
+                model_config["provider"],
+                model_config["model"],
+                context.config.llm_overrides,
+            )
+        return LlmBackend(llm_client=llm_client)
+
     def _extract_from_text(self, context: PipelineContext) -> List[Any]:
         """
         Extract from text-based inputs (plain text, .txt, .md).
@@ -709,27 +733,35 @@ class ExtractionStage(PipelineStage):
 
         logger.info(f"[{self.name()}] Extracting from pre-loaded DoclingDocument")
 
-        # Create extractor if not already created
+        # Create extractor if not already created.
+        # For DoclingDocument input we only need the LLM backend, not the
+        # DocumentProcessor (which requires docling[full]).  _create_extractor
+        # may raise ImportError when docling is not installed because the
+        # strategy __init__ instantiates DocumentProcessor.  We catch that and
+        # fall back to building just the LLM backend directly.
+        backend = None
         if not context.extractor:
             logger.info(f"[{self.name()}] Creating extractor for DoclingDocument...")
-            context.extractor = self._create_extractor(context)
-        if context.trace_data and hasattr(context.extractor, "trace_data"):
-            context.extractor.trace_data = context.trace_data
+            try:
+                context.extractor = self._create_extractor(context)
+            except ImportError:
+                logger.info(
+                    f"[{self.name()}] docling not installed — building LLM backend directly"
+                )
+        if context.extractor:
+            if context.trace_data and hasattr(context.extractor, "trace_data"):
+                context.extractor.trace_data = context.trace_data
+            backend = getattr(context.extractor, "backend", None)
 
-        # Get the document processor and backend from the extractor
-        doc_processor = getattr(context.extractor, "doc_processor", None)
-        backend = getattr(context.extractor, "backend", None)
-
-        if not doc_processor:
-            raise ExtractionError(
-                "Extractor does not have a document processor",
-                details={"extractor_type": type(context.extractor).__name__},
-            )
+        # Fallback: build the LLM backend directly when the full extractor
+        # could not be created (docling not installed).
+        if not backend:
+            backend = self._create_llm_backend(context)
 
         if not backend:
             raise ExtractionError(
-                "Extractor does not have a backend",
-                details={"extractor_type": type(context.extractor).__name__},
+                "Could not create LLM backend for DoclingDocument extraction",
+                details={"extractor_type": type(context.extractor).__name__ if context.extractor else "None"},
             )
 
         try:
