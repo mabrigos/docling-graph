@@ -16,7 +16,13 @@ import logging
 import re
 from typing import List, Union
 
-from docling.chunking import HybridChunker
+try:
+    from docling.chunking import HybridChunker
+
+    _DOCLING_CHUNKING_AVAILABLE = True
+except ImportError:
+    _DOCLING_CHUNKING_AVAILABLE = False
+
 from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 from docling_core.types.doc import DoclingDocument
 from rich import print as rich_print
@@ -80,6 +86,11 @@ class DocumentChunker:
             )
 
         # Initialize HybridChunker
+        if not _DOCLING_CHUNKING_AVAILABLE:
+            raise ImportError(
+                "docling is required for HybridChunker. "
+                "Install with: pip install docling-graph[full]"
+            )
         self.chunker = HybridChunker(
             tokenizer=self.tokenizer,
             merge_peers=merge_peers,

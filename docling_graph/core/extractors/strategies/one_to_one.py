@@ -15,7 +15,6 @@ from ....protocols import (
     get_backend_type,
     is_llm_backend,
 )
-from ..document_processor import DocumentProcessor
 from ..extractor_base import BaseExtractor
 
 
@@ -33,6 +32,9 @@ class OneToOneStrategy(BaseExtractor):
         """
         super().__init__()  # Initialize base extractor with trace_data attribute
         self.backend = backend
+
+        from ..document_processor import DocumentProcessor
+
         self.doc_processor = DocumentProcessor(docling_config=docling_config)
 
         backend_type = get_backend_type(self.backend)

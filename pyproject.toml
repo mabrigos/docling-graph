@@ -31,7 +31,6 @@ authors = [
 ]
 requires-python = ">=3.10,<4.0"
 dependencies = [
-    "docling>=2.70.0,<3.0.0",
     "docling-core[chunking, chunking-openai]>=2.50.0,<3.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "networkx>=3.0.0,<4.0.0",
@@ -54,6 +53,10 @@ upstream = "https://github.com/docling-project/docling-graph"
 docling-graph = "docling_graph.cli.main:main"
 
 [project.optional-dependencies]
+# Full document conversion (PDF, images, Office) — requires docling with ML models
+full = [
+    "docling>=2.70.0,<3.0.0",
+]
 # Legacy provider SDKs removed; LiteLLM is installed by default.
 delta-resolvers = [
     "spacy",

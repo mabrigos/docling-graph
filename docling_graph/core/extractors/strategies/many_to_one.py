@@ -21,7 +21,6 @@ from ....protocols import (
     is_llm_backend,
 )
 from ..contracts.delta.strategy_ops import extract_delta_from_document, extract_delta_from_text
-from ..document_processor import DocumentProcessor
 from ..extractor_base import BaseExtractor
 
 # Initialize logger
@@ -64,6 +63,10 @@ class ManyToOneStrategy(BaseExtractor):
         chunker_config: dict[str, Any] | None = None
         if use_chunking and extraction_contract == "delta":
             chunker_config = {"chunk_max_tokens": int(chunk_max_tokens or 512)}
+
+        # Lazy import — DocumentProcessor requires docling[full] which may not
+        # be installed when only processing pre-converted DoclingDocument JSON.
+        from ..document_processor import DocumentProcessor
 
         self.doc_processor = DocumentProcessor(
             docling_config=docling_config,

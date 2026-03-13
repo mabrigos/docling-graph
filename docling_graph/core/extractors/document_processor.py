@@ -1,15 +1,24 @@
 """
 Shared document processing utilities.
+
+Requires the ``docling`` package (install with ``pip install docling-graph[full]``).
+When docling is not installed, importing this module raises ``ImportError``.
 """
 
 import gc
 import logging
 from typing import Any, List, Literal, Optional, cast, overload
 
-from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
+try:
+    from docling.datamodel.accelerator_options import AcceleratorDevice, AcceleratorOptions
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
+
+    _DOCLING_AVAILABLE = True
+except ImportError:
+    _DOCLING_AVAILABLE = False
+
 from docling_core.types.doc import DoclingDocument
 from rich import print as rich_print
 
@@ -49,6 +58,12 @@ class DocumentProcessor:
         self.chunker = None
         if chunker_config:
             self.chunker = DocumentChunker(**chunker_config)
+
+        if not _DOCLING_AVAILABLE:
+            raise ImportError(
+                "docling is required for PDF/image conversion. "
+                "Install with: pip install docling-graph[full]"
+            )
 
         # Default Pipeline - Most accurate with OCR for standard documents
         pipeline_options = PdfPipelineOptions()
