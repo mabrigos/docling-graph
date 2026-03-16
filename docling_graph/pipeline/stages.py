@@ -8,6 +8,7 @@ testable, and follows the single responsibility principle.
 
 import importlib
 import logging
+import re
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -765,7 +766,7 @@ class ExtractionStage(PipelineStage):
             )
 
         try:
-            # Convert entire document to markdown and extract in a single call
+            # Convert entire document to markdown
             logger.info(f"[{self.name()}] Converting DoclingDocument to markdown")
             markdown_text = context.docling_document.export_to_markdown()
 
@@ -781,11 +782,16 @@ class ExtractionStage(PipelineStage):
                     },
                 )
 
-            extracted_model = backend.extract_from_markdown(
-                markdown=markdown_text,
+            # For large documents, chunk the markdown and use batch
+            # extraction — mirrors what ManyToOneStrategy does with
+            # the delta contract for regular file inputs.
+            chunk_token_limit = context.config.chunk_max_tokens or 512
+            extracted_model = self._extract_maybe_chunked(
+                backend=backend,
+                markdown_text=markdown_text,
                 template=context.template,
-                context="DoclingDocument",
-                is_partial=False,
+                chunk_token_limit=chunk_token_limit,
+                trace_data=context.trace_data,
             )
 
             if not extracted_model:
@@ -813,6 +819,125 @@ class ExtractionStage(PipelineStage):
                 f"Failed to extract from DoclingDocument: {e!s}",
                 details={"input_type": "docling_document", "error": str(e)},
             ) from e
+
+    # ------------------------------------------------------------------
+    # Chunked extraction helpers for DoclingDocument path
+    # ------------------------------------------------------------------
+
+    # Threshold (in characters) above which we switch to chunked
+    # extraction.  ~8 000 tokens × ~4 chars/token ≈ 32 000 chars.
+    _LARGE_DOC_CHAR_THRESHOLD = 32_000
+
+    def _extract_maybe_chunked(
+        self,
+        *,
+        backend: Any,
+        markdown_text: str,
+        template: Any,
+        chunk_token_limit: int,
+        trace_data: Any = None,
+    ) -> Any:
+        """Use chunked batch extraction for large documents, direct for small ones."""
+
+        if (
+            len(markdown_text) > self._LARGE_DOC_CHAR_THRESHOLD
+            and hasattr(backend, "extract_from_chunk_batches")
+        ):
+            logger.info(
+                f"[{self.name()}] Document is large ({len(markdown_text)} chars) — "
+                f"using chunked extraction (limit {chunk_token_limit} tokens/chunk)"
+            )
+            chunks, chunk_metadata = self._chunk_text_simple(
+                markdown_text, chunk_token_limit
+            )
+            if trace_data:
+                for meta, text in zip(chunk_metadata, chunks):
+                    trace_data.emit(
+                        "chunk_created",
+                        "extraction",
+                        {
+                            "chunk_id": meta.get("chunk_id"),
+                            "token_count": meta.get("token_count"),
+                            "page_numbers": meta.get("page_numbers"),
+                            "text_content": text,
+                        },
+                    )
+            return backend.extract_from_chunk_batches(
+                chunks=chunks,
+                chunk_metadata=chunk_metadata,
+                template=template,
+                context="DoclingDocument",
+            )
+
+        # Small document — single LLM call
+        return backend.extract_from_markdown(
+            markdown=markdown_text,
+            template=template,
+            context="DoclingDocument",
+            is_partial=False,
+        )
+
+    @staticmethod
+    def _chunk_text_simple(
+        text: str, max_tokens: int = 512
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        """Sentence-aware text chunker that does not require docling.
+
+        Mirrors DocumentChunker.chunk_text_fallback but uses a lightweight
+        character-based token estimate (1 token ≈ 4 chars) so we avoid
+        importing heavy tokeniser libraries at the pipeline level.
+        """
+        chars_per_token = 4
+        max_chars = max_tokens * chars_per_token
+
+        if len(text) <= max_chars:
+            return [text], [{"chunk_id": 0, "page_numbers": [0], "token_count": len(text) // chars_per_token}]
+
+        segments = [
+            seg.strip()
+            for seg in re.split(r"(?<=[.!?])\s+|\n\n|\n", text)
+            if seg and seg.strip()
+        ]
+        if not segments:
+            # Last resort: split by characters
+            chunks = [text[i : i + max_chars] for i in range(0, len(text), max_chars)]
+            meta = [
+                {"chunk_id": i, "page_numbers": [0], "token_count": len(c) // chars_per_token}
+                for i, c in enumerate(chunks)
+            ]
+            return chunks, meta
+
+        chunks: list[str] = []
+        current: list[str] = []
+        current_len = 0
+
+        for segment in segments:
+            seg_len = len(segment)
+            if seg_len > max_chars:
+                # Flush current buffer
+                if current:
+                    chunks.append(" ".join(current))
+                    current, current_len = [], 0
+                # Hard-split oversized segment
+                for i in range(0, seg_len, max_chars):
+                    chunks.append(segment[i : i + max_chars])
+                continue
+
+            if current_len + seg_len + 1 > max_chars and current:
+                chunks.append(" ".join(current))
+                current, current_len = [], 0
+
+            current.append(segment)
+            current_len += seg_len + 1
+
+        if current:
+            chunks.append(" ".join(current))
+
+        meta = [
+            {"chunk_id": i, "page_numbers": [0], "token_count": len(c) // chars_per_token}
+            for i, c in enumerate(chunks)
+        ]
+        return chunks, meta
 
 
 class DoclingExportStage(PipelineStage):
