@@ -73,11 +73,27 @@ class CypherExporter:
         self._write_relationships(graph, buf)
 
         raw = buf.getvalue()
-        statements = [
-            line.strip()
-            for line in raw.splitlines()
-            if line.strip() and not line.strip().startswith("//")
-        ]
+        # Relationship statements span two lines (MATCH + CREATE) separated
+        # from other statements by blank lines.  Split on blank lines to keep
+        # multi-line statements together, then split any remaining compound
+        # single-line statements (consecutive CREATEs for nodes).
+        blocks = raw.split("\n\n")
+        statements = []
+        for block in blocks:
+            lines = [
+                line.strip()
+                for line in block.splitlines()
+                if line.strip() and not line.strip().startswith("//")
+            ]
+            if not lines:
+                continue
+            # If the block starts with MATCH, it's a multi-line relationship
+            # statement — join into one.
+            if lines[0].upper().startswith("MATCH"):
+                statements.append(" ".join(lines))
+            else:
+                # Individual node CREATE statements — keep each as its own.
+                statements.extend(lines)
         return statements
 
     def validate_graph(self, graph: nx.DiGraph) -> bool:
