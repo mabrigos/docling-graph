@@ -190,6 +190,7 @@ class CypherExporter:
             graph: NetworkX directed graph.
             file: File object to write to.
         """
+        first = True
         for source, target, data in graph.edges(data=True):
             source_var = self._node_vars.get(source)
             target_var = self._node_vars.get(target)
@@ -207,6 +208,12 @@ class CypherExporter:
                 if key != "label" and value is not None:
                     escaped_value = self._escape_cypher_string(value)
                     props.append(f'{key}: "{escaped_value}"')
+
+            # Ensure blank line before each relationship block so
+            # export_as_statements() can split correctly.
+            if first:
+                file.write("\n")
+                first = False
 
             # Write MATCH and CREATE statements
             file.write(f"MATCH ({source_var}), ({target_var})\n")
