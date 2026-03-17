@@ -532,7 +532,8 @@ class ExtractionStage(PipelineStage):
         """Create a bare LLM backend without a full extractor.
 
         Used for DoclingDocument JSON input when docling is not installed —
-        we only need the LLM client to call ``extract_from_markdown``.
+        we only need the LLM client to call ``extract_from_markdown`` or
+        ``extract_from_chunk_batches``.
         """
         from ..core.extractors.backends.llm_backend import LlmBackend
 
@@ -550,7 +551,48 @@ class ExtractionStage(PipelineStage):
                 model_config["model"],
                 context.config.llm_overrides,
             )
-        return LlmBackend(llm_client=llm_client)
+
+        extraction_contract = cast(
+            Literal["direct", "staged", "delta"],
+            conf.get("extraction_contract", "direct"),
+        )
+        staged_config = {
+            "structured_output": bool(conf.get("structured_output", True)),
+            "structured_sparse_check": bool(conf.get("structured_sparse_check", True)),
+            "max_pass_retries": conf.get("staged_pass_retries", 1),
+            "parallel_workers": conf.get("parallel_workers", 1),
+            "llm_batch_token_size": conf.get("llm_batch_token_size", 1024),
+            "gleaning_enabled": conf.get("gleaning_enabled", True),
+            "gleaning_max_passes": conf.get("gleaning_max_passes", 1),
+            "delta_normalizer_validate_paths": conf.get("delta_normalizer_validate_paths", True),
+            "delta_normalizer_canonicalize_ids": conf.get(
+                "delta_normalizer_canonicalize_ids", True
+            ),
+            "delta_normalizer_strip_nested_properties": conf.get(
+                "delta_normalizer_strip_nested_properties", True
+            ),
+            "delta_normalizer_attach_provenance": conf.get(
+                "delta_normalizer_attach_provenance", True
+            ),
+            "delta_resolvers_enabled": conf.get("delta_resolvers_enabled", True),
+            "delta_resolvers_mode": conf.get("delta_resolvers_mode", "semantic"),
+            "delta_quality_require_root": conf.get("delta_quality_require_root", True),
+            "delta_quality_min_instances": conf.get("delta_quality_min_instances", 20),
+            "delta_quality_max_parent_lookup_miss": conf.get(
+                "delta_quality_max_parent_lookup_miss", 4
+            ),
+            "delta_quality_adaptive_parent_lookup": conf.get(
+                "delta_quality_adaptive_parent_lookup", True
+            ),
+        }
+
+        return LlmBackend(
+            llm_client=llm_client,
+            extraction_contract=extraction_contract,
+            staged_config=staged_config,
+            structured_output=bool(conf.get("structured_output", True)),
+            structured_sparse_check=bool(conf.get("structured_sparse_check", True)),
+        )
 
     def _extract_from_text(self, context: PipelineContext) -> List[Any]:
         """
