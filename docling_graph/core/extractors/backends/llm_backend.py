@@ -61,7 +61,7 @@ class LlmBackend:
             1.0,
             float(self._staged_config_raw.get("truncation_retry_max_tokens_multiplier", 2.0)),
         )
-        self._truncation_retry_cap = 32768
+        self._truncation_retry_cap = 65536
 
         # Get model identifier for logging
         model_attr = getattr(llm_client, "model", None) or getattr(llm_client, "model_id", None)
