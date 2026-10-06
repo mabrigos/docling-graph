@@ -1,4 +1,4 @@
-__version__ = "1.4.4"
+__version__ = "1.4.4+alp.1"
 
 from .config import LLMConfig, ModelConfig, ModelsConfig, PipelineConfig
 from .core.exporters.cypher_exporter import CypherExporter
